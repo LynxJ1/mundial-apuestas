@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Apuestas Mundial 2026</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
+</head>
+
+<body>
+    <h1>Apuestas del Mundial</h1>
+
+    <h2>Tabla de puntos</h2>
+    <table border="1">
+        <tr>
+            <th>Posicion</th>
+            <th>Participante</th>
+            <th>Puntos</th>
+        </tr>
+        {% for p, pts in tabla_puntos %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ p }}</td>
+            <td>{{ pts }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <h2>Participantes</h2>
+    <ul>
+        {% for p in datos.participantes %}
+        <li>{{ p }}</li>
+        {% endfor %}
+    </ul>
+    <h2>Partidos</h2>
+    <ul>
+        {% for partido in datos.partidos %}
+        <li>{{ partido.local }} vs {{ partido.visitante }}
+            {% if partido.resultado_real %}
+            - Resultado: {{ partido.resultado_real[0] }}-{{ partido.resultado_real[1] }}
+            {% else %}
+            - Pendiente
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% block contenido_admin %}{% endblock %}
+
+</body>
+
+</html>

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block contenido_admin %}
+    <h2>Agregar Participante</h2>
+    <form action="/agregar-participante" method="POST">
+        <input type="text" name="nombre" placeholder="Nombre del participante" required>
+        <button type="submit">Agregar</button>
+    </form>
+
+    <h2>Agregar Partido</h2>
+    <form action="/agregar-partido" method="POST">
+        <input type="text" name="local" placeholder="Equipo local" required>
+        <input type="text" name="visitante" placeholder="Equipo Visitante" required>
+
+        <h3>Apuestas</h3>
+        {% for p in datos.participantes %}
+        <div>
+            <label>{{ p }}</label>
+            <input type="number" name="goles_local_{{ p }}" min="0" placeholder="Goles local" required>
+            -
+            <input type="number" name="goles_visit_{{ p }}" min="0" placeholder="Goles visitante" required>
+        </div>
+        {% endfor %}
+
+        <button type="submit">Guardar partido</button>
+    </form>
+
+    <h2>Partidos pendientes</h2>
+    {% for partido in datos.partidos %}
+    {% if partido.resultado_real is none %}
+    <div>
+        <strong>{{ partido.local }} vs {{ partido.visitante }}</strong>
+        <form action="/resultado/{{ partido.id }}" method="POST">
+            <input type="number" name="goles_local_real" min="0" placeholder="Goles {{ partido.local }}" required>
+            -
+            <input type="number" name="goles_visit_real" min="0" placeholder="Goles {{ partido.visitante }}" required>
+            <button type="submit">Guardar resultado</button>
+        </form>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <p><a href="/logout">Cerrar Sesion</a></p>
+{% endblock %}
