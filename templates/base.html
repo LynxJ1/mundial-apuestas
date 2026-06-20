@@ -27,18 +27,18 @@
     </table>
     <h2>Participantes</h2>
     <ul>
-        {% for p in datos.participantes %}
-        <li>{{ p }}</li>
+        {% for p in participantes %}
+        <li>{{ p.nombre }}</li>
         {% endfor %}
     </ul>
     <h2>Partidos</h2>
     <ul>
-        {% for partido in datos.partidos %}
+        {% for partido in partidos %}
         <li>{{ partido.local }} vs {{ partido.visitante }}
-            {% if partido.resultado_real %}
-            - Resultado: {{ partido.resultado_real[0] }}-{{ partido.resultado_real[1] }}
+            {% if partido.goles_local_real is not none %}
+            — Resultado: {{ partido.goles_local_real }}-{{ partido.goles_visit_real }}
             {% else %}
-            - Pendiente
+            — Pendiente
             {% endif %}
         </li>
         {% endfor %}

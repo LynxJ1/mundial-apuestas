@@ -13,12 +13,12 @@
         <input type="text" name="visitante" placeholder="Equipo Visitante" required>
 
         <h3>Apuestas</h3>
-        {% for p in datos.participantes %}
+        {% for p in participantes %}
         <div>
-            <label>{{ p }}</label>
-            <input type="number" name="goles_local_{{ p }}" min="0" placeholder="Goles local" required>
+            <label>{{ p.nombre }}:</label>
+            <input type="number" name="goles_local_{{ p.nombre }}" min="0" placeholder="Goles local" required>
             -
-            <input type="number" name="goles_visit_{{ p }}" min="0" placeholder="Goles visitante" required>
+            <input type="number" name="goles_visit_{{ p.nombre }}" min="0" placeholder="Goles visitante" required>
         </div>
         {% endfor %}
 
@@ -26,8 +26,8 @@
     </form>
 
     <h2>Partidos pendientes</h2>
-    {% for partido in datos.partidos %}
-    {% if partido.resultado_real is none %}
+    {% for partido in partidos %}
+    {% if partido.goles_local_real is none %}
     <div>
         <strong>{{ partido.local }} vs {{ partido.visitante }}</strong>
         <form action="/resultado/{{ partido.id }}" method="POST">

@@ -5,6 +5,17 @@ import json
 app = Flask(__name__)
 ARCHIVO_DATOS = "data.json"
 
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def conectar():
+    conn = psycopg2.connect(os.environ["DATABASE_URL"], cursor_factory=RealDictCursor)
+    return conn
+
 app.secret_key = "CorralejasyAnolaima"
 CONTRASENA_ADMIN = "Corralejas1909."
 
@@ -63,84 +74,140 @@ def logout():
     session.pop("logueado", None)
     return redirect("/")
 
-def calcular_tabla_puntos(datos):
-    tabla_puntos = {p: 0 for p in datos["participantes"]}
-    for partido in datos["partidos"]:
-        if partido["resultado_real"] is not None:
-            for participante, apuesta in partido["apuestas"].items():
-                pts = calcular_puntos(apuesta, partido["resultado_real"])
-                tabla_puntos[participante] += pts
-    
+def calcular_tabla_puntos(participantes, partidos):
+    tabla_puntos = {p["nombre"]: 0 for p in participantes}
+
+    for partido in partidos:
+        if partido["goles_local_real"] is not None:
+            real = (partido["goles_local_real"], partido["goles_visit_real"])
+            for apuesta in partido["apuestas"]:
+                ap = (apuesta["goles_local"], apuesta["goles_visit"])
+                pts = calcular_puntos(ap, real)
+                tabla_puntos[apuesta["nombre"]] += pts
+
     tabla_ordenada = sorted(tabla_puntos.items(), key=lambda x: x[1], reverse=True)
     return tabla_ordenada
 
 
 @app.route("/")
 def inicio():
-    datos = cargar_datos()
+    conn = conectar()
+    cur = conn.cursor()
 
-    tabla_puntos = calcular_tabla_puntos(datos)
-    
-    return render_template("index.html", datos=datos, tabla_puntos=tabla_puntos)
+    cur.execute("SELECT * FROM participantes ORDER BY id")
+    participantes = cur.fetchall()
+
+    cur.execute("SELECT * FROM partidos ORDER BY id")
+    partidos = cur.fetchall()
+
+    for partido in partidos:
+        cur.execute("""
+            SELECT apuestas.goles_local, apuestas.goles_visit, participantes.nombre
+            FROM apuestas
+            JOIN participantes ON apuestas.participante_id = participantes.id
+            WHERE apuestas.partido_id = %s
+        """, (partido["id"],))
+        partido["apuestas"] = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    tabla_puntos = calcular_tabla_puntos(participantes, partidos)
+
+    return render_template("index.html", participantes=participantes, partidos=partidos, tabla_puntos=tabla_puntos)
 
 @app.route("/admin")
 @requiere_login
 def admin():
-    datos = cargar_datos()
-    tabla_puntos = calcular_tabla_puntos(datos)
-    return render_template("admin.html", datos=datos, tabla_puntos=tabla_puntos)
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM participantes ORDER BY id")
+    participantes = cur.fetchall()
+
+    cur.execute("SELECT * FROM partidos ORDER BY id")
+    partidos = cur.fetchall()
+
+    for partido in partidos:
+        cur.execute("""
+            SELECT apuestas.goles_local, apuestas.goles_visit, participantes.nombre
+            FROM apuestas
+            JOIN participantes ON apuestas.participante_id = participantes.id
+            WHERE apuestas.partido_id = %s
+        """, (partido["id"],))
+        partido["apuestas"] = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    tabla_puntos = calcular_tabla_puntos(participantes, partidos)
+
+    return render_template("admin.html", participantes=participantes, partidos=partidos, tabla_puntos=tabla_puntos)
 
 @app.route("/agregar-participante", methods=["POST"])
 @requiere_login
 def agregar_participante():
     nombre = request.form["nombre"]
-    datos = cargar_datos()
-    datos["participantes"].append(nombre)
-    guardar_datos(datos)
-    return redirect("/")
 
+    conn = conectar()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO participantes (nombre) VALUES (%s)", (nombre,))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect("/admin")
 
 @app.route("/agregar-partido", methods=["POST"])
 @requiere_login
 def agregar_partido():
-    datos = cargar_datos()
-
     local = request.form["local"]
     visitante = request.form["visitante"]
 
-    apuestas = {}
-    for p in datos["participantes"]:
-        gl = int(request.form[f"goles_local_{p}"])
-        gv = int(request.form[f"goles_visit_{p}"])
-        apuestas[p] = [gl, gv]
+    conn = conectar()
+    cur = conn.cursor()
 
-    nuevo_partido = {
-        "id": len(datos["partidos"]) + 1,
-        "local": local,
-        "visitante": visitante,
-        "resultado_real": None,
-        "apuestas": apuestas,
-    }
+    cur.execute("SELECT * FROM participantes ORDER BY id")
+    participantes = cur.fetchall()
 
-    datos["partidos"].append(nuevo_partido)
-    guardar_datos(datos)
-    return redirect("/")
+    cur.execute(
+        "INSERT INTO partidos (local, visitante) VALUES (%s, %s) RETURNING id",
+        (local, visitante)
+    )
+    partido_id = cur.fetchone()["id"]
+
+    for p in participantes:
+        gl = int(request.form[f"goles_local_{p['nombre']}"])
+        gv = int(request.form[f"goles_visit_{p['nombre']}"])
+        cur.execute(
+            "INSERT INTO apuestas (partido_id, participante_id, goles_local, goles_visit) VALUES (%s, %s, %s, %s)",
+            (partido_id, p["id"], gl, gv)
+        )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect("/admin")
 
 
 @app.route("/resultado/<int:partido_id>", methods=["POST"])
 @requiere_login
 def guardar_resultado(partido_id):
-    datos = cargar_datos()
-
     gl_real = int(request.form["goles_local_real"])
     gv_real = int(request.form["goles_visit_real"])
 
-    for partido in datos["partidos"]:
-        if partido["id"] == partido_id:
-            partido["resultado_real"] = [gl_real, gv_real]
+    conn = conectar()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE partidos SET goles_local_real = %s, goles_visit_real = %s WHERE id = %s",
+        (gl_real, gv_real, partido_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
 
-    guardar_datos(datos)
-    return redirect("/")
+    return redirect("/admin")
 
 
 if __name__ == "__main__":
